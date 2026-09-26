@@ -1,0 +1,393 @@
+{
+  "name": "AI Study Assistant",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bfca5545-a295-4bff-8ce1-60efc45a9174",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "queryString": "R2-DREAMER.pdf",
+        "filter": {},
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "9178bf1c-7e87-4dda-9d03-0ae68813fda7",
+      "name": "Search files and folders",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "87MA3ofCHepUw3B3",
+          "name": "Google Drive account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "7d9045d6-6091-44cd-9cae-ef9091182c4d",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "87MA3ofCHepUw3B3",
+          "name": "Google Drive account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "AI_Study_Assistant",
+          "mode": "list",
+          "cachedResultName": "AI_Study_Assistant"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        624,
+        0
+      ],
+      "id": "f87aded6-8e20-4d81-858a-3bd22396be7e",
+      "name": "Qdrant Vector Store",
+      "credentials": {
+        "qdrantApi": {
+          "id": "es0AITOdFqiCzkg4",
+          "name": "Qdrant account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "qwen3-embedding:0.6b"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        592,
+        192
+      ],
+      "id": "094de0af-2683-47ca-bebc-a83e76b2c61c",
+      "name": "Embeddings Ollama",
+      "credentials": {
+        "ollamaApi": {
+          "id": "8HDX5rgKPqFIlPj3",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        768,
+        208
+      ],
+      "id": "56aa9826-23e8-458d-88dc-d04cfd890f96",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        1120,
+        -32
+      ],
+      "id": "915e0057-af13-4a9e-8a79-2cb599e70bf5",
+      "name": "When chat message received",
+      "webhookId": "0b721522-1681-4df4-b81a-8977db7f3094"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are an AI Study Assistant.\n\nYour job is to help students understand and manage their uploaded study materials.\n\nYou have two fundamentally different types of tools:\n\n==================================================\n1. QDRANT VECTOR STORE\n==================================================\n\nQdrant is your KNOWLEDGE SOURCE.\n\nIt contains the student's uploaded study materials.\n\nUse Qdrant whenever the user asks about information that should come from the uploaded study materials.\n\nExamples:\n- Explain a section\n- Explain a method\n- Summarize a paper\n- Find a definition\n- Explain an experiment\n- Explain a result\n- Answer a question about the uploaded paper\n\nDo NOT use your general knowledge when the answer should come from the study material.\n\nThe retrieved Qdrant documents are the actual source material.\n\n==================================================\n2. MCP TOOLS\n==================================================\n\nMCP tools are ACTION TOOLS.\n\nThey are used to perform actions such as:\n\n- Save a summary to Google Sheets\n- Send a summary by email\n- Create a PDF\n\nMCP results are NOT study material.\n\nNever interpret an MCP success/error message as evidence about the study content.\n\n==================================================\nCORE WORKFLOW\n==================================================\n\nFor a normal study question:\n\nUser\n↓\nQdrant\n↓\nRead retrieved material\n↓\nAnswer from retrieved material\n\n\nFor a summary request:\n\nUser\n↓\nQdrant\n↓\nRead retrieved material\n↓\nCreate the FINAL summary\n↓\nReturn the summary\n\n\nFor a study question + MCP action:\n\nUser\n↓\nQdrant\n↓\nRead retrieved material\n↓\nCreate the FINAL summary\n↓\nMCP ACTION\n↓\nFinal response\n\n\n==================================================\nCRITICAL MULTI-STEP RULE\n==================================================\n\nWhen the user asks for both study information and an MCP action:\n\nDO NOT stop after Qdrant.\n\nDO NOT answer immediately after Qdrant.\n\nFirst retrieve the study material.\n\nThen independently generate the final answer/summary from that material.\n\nThen pass the ACTUAL generated summary to the requested MCP tool.\n\nThe MCP tool must receive the actual summary text.\n\nNEVER pass:\n\n- \"summary from Qdrant\"\n- \"retrieved documents\"\n- \"Section 3 of the paper\"\n- \"the information above\"\n- \"the retrieved content\"\n- a section title instead of the summary\n- a placeholder\n\nThe `summary` argument of an MCP tool must contain the COMPLETE FINAL SUMMARY TEXT.\n\n==================================================\nMULTIPLE MCP ACTIONS\n==================================================\n\nIf the user asks for multiple actions:\n\nExample:\n\n\"Explain Section 3, summarize it, save it to Google Sheets, and email it.\"\n\nPerform:\n\n1. Qdrant retrieval\n2. Generate ONE final summary\n3. Save THAT EXACT summary to Google Sheets\n4. Send THAT EXACT summary by email\n5. If requested, create a PDF using THAT EXACT summary\n6. Give the final response\n\nDo not create different summaries for different MCP tools.\n\n==================================================\nEMAIL RULE\n==================================================\n\nNever invent an email address.\n\nNever use:\n\nyour_email@example.com\nyou@example.com\nexample.com\ntest@example.com\n\nIf the user says \"send it to me\" or does not specify another recipient, use the configured default recipient provided by the MCP tool.\n\n==================================================\nERROR HANDLING\n==================================================\n\nIf an MCP tool fails:\n\n- Do not change the study summary.\n- Do not claim the study information was missing.\n- Continue with other requested actions when possible.\n- Report which action succeeded and which action failed.\n\nIf Qdrant returns relevant material:\n\nNEVER say:\n\n\"The requested information was not found.\"\n\nIf Qdrant genuinely returns no relevant information:\n\nSay:\n\n\"The requested information was not found in the available study material.\"\n\nDo not invent an answer from general knowledge.\n\n==================================================\nIMPORTANT\n==================================================\n\nQdrant = KNOWLEDGE\n\nMCP = ACTION\n\nNever confuse the two.\n\nThe final study summary must be created by YOU from the retrieved study material before sending it to an MCP action tool.\n\nAlways prioritize completing the user's requested workflow instead of stopping after the first successful tool call.",
+          "maxIterations": 5
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1328,
+        -32
+      ],
+      "id": "5b2df9b0-a20d-4818-9d3a-914df2530876",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "STUDY MATERIAL RETRIEVAL TOOL\n\nThis tool retrieves relevant information from the student's uploaded study materials stored in the Qdrant vector database.\n\nUse this tool as the ONLY source of study-material knowledge.\n\nWHEN TO USE:\n- Use this tool whenever the user asks a question about the uploaded study materials.\n- Use it before answering questions about a paper, section, method, experiment, result, definition, or concept contained in the study materials.\n- Use it before creating a summary of study material.\n- Use it before performing an MCP action that depends on study-material content.\n\nIMPORTANT:\n- Qdrant is a KNOWLEDGE RETRIEVAL tool.\n- Qdrant is NOT an action tool.\n- The retrieved documents contain the actual study material.\n- Read and understand the retrieved content before generating an answer or summary.\n- Do not treat tool names, metadata, filenames, or section titles as the answer.\n- Do not invent information that is not present in the retrieved documents.\n- Do not use MCP results as study knowledge.\n\nFOR SUMMARY TASKS:\nFirst retrieve the relevant study material from Qdrant.\nThen create the final summary from the retrieved content.\nOnly after creating the final summary should you call an MCP action such as Google Sheets, Gmail, or PDF.\n\nCRITICAL:\nIf Qdrant returns relevant study material, do NOT say that the information was not found.\nThe retrieved content must be used to answer the user's question.",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "AI_Study_Assistant",
+          "mode": "list",
+          "cachedResultName": "AI_Study_Assistant"
+        },
+        "topK": 6,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        1536,
+        224
+      ],
+      "id": "f58ac6f0-7f38-43fe-ac70-3e87ec91e255",
+      "name": "Qdrant Vector Store1",
+      "credentials": {
+        "qdrantApi": {
+          "id": "es0AITOdFqiCzkg4",
+          "name": "Qdrant account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "qwen3-embedding:0.6b"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        416
+      ],
+      "id": "fed849fb-8887-4cb5-b7f2-d4c2776de25d",
+      "name": "Embeddings Ollama1",
+      "credentials": {
+        "ollamaApi": {
+          "id": "8HDX5rgKPqFIlPj3",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "http://127.0.0.1:8000/mcp",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.4,
+      "position": [
+        1424,
+        288
+      ],
+      "id": "ae4ad752-521f-4478-b866-fae2d4064e1e",
+      "name": "MCP Client"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        1344,
+        176
+      ],
+      "id": "f3e59b2c-d285-4519-a74e-d1fc07d613c5",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "openai/gpt-oss-120b",
+          "mode": "list",
+          "cachedResultName": "openai/gpt-oss-120b"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1200,
+        176
+      ],
+      "id": "a12143e7-6784-4e79-9a29-94eb8c05dc48",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "oRoQnCJ1WWNYs6fD",
+          "name": "OpenAI account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Search files and folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search files and folders": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Ollama": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Vector Store1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Ollama1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Vector Store1",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    },
+    "MCP Client": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f4fb7112-a5b1-48d9-b0b7-56171ad84a5a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e4299fc658f32603235ca61909e2d39bc0e2cbbaf4e173fac3fd979543ec1734"
+  },
+  "nodeGroups": [],
+  "id": "2hEMCyPbd0hyOJrW",
+  "tags": []
+}
