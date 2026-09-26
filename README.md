@@ -339,9 +339,9 @@ Add a web-based student interface
 
 Author
 
-Mohamed Adel
+Mohamed Adel Yousef Wetwet
 
-High School Student - Gharbiya STEM School
+High School Student - Gharbiya STEM School S28
 
 Interested in:
 
@@ -366,20 +366,3 @@ AI Research
 License
 
 This project is for educational and experimental purposes.
-
-### الشكل النهائي على GitHub
-
-```text
-AI-Study-Assistant
-│
-├── README.md
-│
-├── mcp-server
-│   ├── server.py
-│   └── requirements.txt
-│
-├── n8n
-│   └── AI-Study-Assistant.json
-│
-└── rag
-    └── README.md
